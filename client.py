@@ -3,7 +3,8 @@ import argparse
 import logging
 import threading
 import random
-import context
+import json
+from context import Context
 
 SUCCESS = 1
 FAILURE = -1
@@ -11,42 +12,79 @@ BUFFER_SIZE = 1024
 
 def do_handshake(client, conn):
     cisn = random.randint(1, 1000000000)
-    saddr = conn[0]
-    sport = conn[1]
-    caddr = ...
-    cport = ...
-    ctxt = context.Context(saddr, sport, caddr, cport, cisn)
 
+    # SYN
     flag = 1
     ack = 0
     msg = b''
     msg += flag.to_bytes(1, byteorder="big")
-    msg += isn.to_bytes(4, byteorder="big")
+    msg += cisn.to_bytes(4, byteorder="big")
     msg += ack.to_bytes(4, byteorder="big")
+
+    logging.debug("flag: {}".format(flag))
+    logging.debug("cisn: {}".format(cisn))
+    logging.debug("ack: {}".format(ack))
+
     client.sendto(msg, conn)
 
+    # SYN/ACK
+
+    saddr = conn[0]
+    sport = conn[1]
+    caddr = client.getsockname()[0]
+    cport = client.getsockname()[1]
+    #ctxt = Context(saddr, sport, caddr, cport, sisn, cisn)
+
+    #logging.info("identifier: {}".format(ctxt.get_identifier()))
+
+    # Test context
+    ctxt = Context("127.0.0.1", 7890, "127.0.0.1", 30000, 4001, 1002)
+    
     return ctxt
 
 # make_connection: (server's IP address * server's port numer) -> context
-def make_connection(addr, port):
-    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+def make_connection(client, addr, port):
     conn = (addr, port)
     ctxt = do_handshake(client, conn)
     return ctxt
 
+# do_user_creation: (server's IP address * server's port number * context) -> success (1)/failure (-1)
+def do_user_creation(client, addr, port, ctxt):
+    account = "account{}".format(random.randint(1, 100))
+    password = "{}_password".format(account)
+
+    body = {}
+    body["password"] = password
+    js = json.dumps(body)
+    clen = len(js)
+
+    msg = "POST /user/{}\r\nContent-Length:{}\r\n\r\n".format(account, clen)
+    msg += js
+
+    logging.debug("content request message: {}".format(msg))
+
+    encap = ctxt.encap(msg)
+    client.sendto(encap, (addr, port))
+
+    ret = SUCCESS
+
+    return ret
+
+
 # do_signing_in: (server's IP address * server's port number * context) -> success (1)/failure (-1)
-def do_signing_in(addr, port, ctxt):
-https://docs.google.com/spreadsheets/d/1neDIk6Bq0y6vH0Vlrve-EHEIfe9fv01IhzmesJFq5bI/edit?usp=sharing    username = ""
+def do_signing_in(client, addr, port, ctxt):
     password = ""
     ret = FAILURE
 
     return ret
 
 def client(addr, port):
-    ctxt = make_connection(addr, port)
-    ret = do_signing_in(addr, port, ctxt)
+    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ctxt = make_connection(client, addr, port)
+    ret = do_user_creation(client, addr, port, ctxt)
+    ret = do_signing_in(client, addr, port, ctxt)
     if ret == SUCCESS:
-        content = request_content(addr, port, ctxt)
+        content = request_content(client, addr, port, ctxt)
         if content:
             logging.info("Content: {}".format(content))
         else:

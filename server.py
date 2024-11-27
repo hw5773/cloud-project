@@ -1,7 +1,9 @@
 import socket
+import random
 import threading
 import argparse
 import logging
+from context import Context
 
 SUCCESS = 1
 FAILURE = -1
@@ -11,12 +13,34 @@ BUFFER_SIZE = 1024
 def do_handshake(msg, server, conn):
     sisn = random.randint(1, 1000000000)
 
-    ...
+    # SYN
+    flag = msg[0]
+    cisn = int.from_bytes(msg[1:5], byteorder="big")
+    ack = int.from_bytes(msg[5:9], byteorder="big")
 
+    logging.debug("flag: {}".format(flag))
+    logging.debug("cisn: {}".format(cisn))
+    logging.debug("ack: {}".format(ack))
+
+    # SYN/ACK
+
+    saddr = server.getsockname()[0]
+    sport = server.getsockname()[1]
+    caddr = conn[0]
+    cport = conn[1]
+
+    ctxt = Context(saddr, sport, caddr, cport, sisn, cisn)
+
+    # Test context
+    ctxt = Context("127.0.0.1", 7890, "127.0.0.1", 30000, 4001, 1002)
     return ctxt
 
 # handle_content_protocol: (message * server socket * client's address/port number) -> success(1) / failure (-1)
-def handle_content_protocol(msg, server, conn):
+def handle_content_protocol(msg, server, conn, ctxt):
+    request = ctxt.decap(msg)
+
+    logging.debug("request: {}".format(request))
+
     return ret
 
 def run(addr, port):
@@ -32,8 +56,8 @@ def run(addr, port):
         msg, conn = server.recvfrom(BUFFER_SIZE)
         logging.info("[*] Server accept the connection from {}:{}> {}".format(conn[0], conn[1], msg))
 
-        saddr = ...
-        sport = ...
+        saddr = server.getsockname()[0]
+        sport = server.getsockname()[1]
         caddr = conn[0]
         cport = conn[1]
 
@@ -44,7 +68,7 @@ def run(addr, port):
             context_storage[identifier] = ctxt
         else:
             ctxt = context_storage[identifier]
-            ret = handle_content_protocol(msg, server, conn)
+            ret = handle_content_protocol(msg, server, conn, ctxt)
 
 def command_line_args():
     parser = argparse.ArgumentParser()
